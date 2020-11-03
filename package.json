@@ -1,0 +1,15 @@
+{
+  "name": "fbi-missing-person-api",
+  "version": "1.0.0",
+  "description": "FBI Missing Persons API",
+  "main": "serve.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node serve.js"
+  },
+  "author": "Jaylan Snelson",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^5.4.1"
+  }
+}
