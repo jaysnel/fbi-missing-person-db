@@ -1,9 +1,13 @@
 //DB Info
+require('dotenv').config();
 const mongodb = require('mongodb');
 const mongoclient = mongodb.MongoClient;
-const connectionURL = 'mongodb://127.0.0.1:27017';
-const databasename = 'fbi-missing-persons';
-const nameofcollection = 'missing-persons';
+const username = process.env.CLUSTER_USERNAME;
+const password = process.env.CLUSTER_PASSWORD;
+const databasename = process.env.DATABASE_NAME;
+const nameofcollection = process.env.COLLECTION_NAME;
+const uri = `mongodb+srv://${username}:${password}@cluster0.suitu.mongodb.net/${databasename}>?retryWrites=true&w=majority`;
+const client = new mongoclient(uri, { useNewUrlParser: true, useUnifiedTopology: true  });
 
 //Web Scraping Info
 const puppeteer = require('puppeteer');
@@ -13,6 +17,26 @@ let missingpersons = [];
 const fbimissingpersondatafileName = "fbimissingpersondata.txt";
 const fbimissingpersondetailsfileName = "fbimissingpersondetailsfile.txt"
 let fbimissingpersondetails = [];
+
+
+function addMissingPersonsListFullToDB() {
+
+    fs.readFile(fbimissingpersondatafileName, (err, data) => {
+        if(err) return console.log(err);
+        let details = JSON.parse(data);
+            //Clear DB out here
+            
+            //Add final file to DB
+            client.connect(err => {
+                if(err) return console.log(err);
+                const collection = client.db(databasename).collection(nameofcollection);
+                collection.insertMany(details);
+                client.close();
+              });
+    })
+
+}
+
 
 // function for geting intial links of missing persons from fbi url
 let storeInitialFBIData = async () => {
@@ -51,7 +75,7 @@ let storeInitialFBIData = async () => {
   };
 
 // function for geting details of each missing person from fbi missing person url
-  let getPersonsFromFBIData = async (link) => {
+  let getPersonsDataFromFBI = async (link) => {
     const browser = await puppeteer.launch({headless: false});
     //const browser = await puppeteer.launch();
     const page = await browser.newPage();
@@ -83,54 +107,35 @@ let storeInitialFBIData = async () => {
     missingpersonobj["Headshot"] = image;
     //pushing to global array
     fbimissingpersondetails.push(missingpersonobj);
-
-    mongoclient.connect(connectionURL, { useUnifiedTopology: true }, (err, client) => {
-        if(err) return console.log(err);
-        
-        const db = client.db(databasename);
-
-        fs.readFile(fbimissingpersondatafileName, (err, data) => {
-            if(err) return console.log(err);
-            let details = JSON.parse(data);
-            if(details.length === fbimissingpersondetails.length) {
-                //Clear DB out here
-                db.collection(nameofcollection).deleteMany({
-                    Found: false
-                }, (err) => {
-                    if(err) return console.log(err);
-                })
-
-                //Inserting each missing person to DB
-                db.collection(nameofcollection).insertMany(fbimissingpersondetails, (err) => {
-                    if(err) return console.log(err);
-                    return false;
-                });
-                console.log("Saved Missing Persons To DB.");
-            }
-        })
-    })
     //this makes sense right?
     fs.writeFile(fbimissingpersondetailsfileName, JSON.stringify(fbimissingpersondetails), err => {
         if(err) console.log(err);
         console.log("Saved Person.");
     });
-
     browser.close();
   };
 
 function sortMissingPersonData() {
     fs.readFile(fbimissingpersondatafileName, async (err, data) => {
-        if(err) console.log(err);
+        if(err) return console.log(err);
         let details = JSON.parse(data);
-        for(let i = 0; i <= details.length; i++) {
-            await getPersonsFromFBIData(details[i].link);
+        for(let i = 0; i <= details.length - 1; i++) {
+            await getPersonsDataFromFBI(details[i].link);
         }
+
+        //Final step
+        //THIS NEEDS TO BE ADDED!!! MAYBE WITH ASYNC/AWAIT? WELL NEED TO FIGURE THIS AFTER I GET THIS "MongoError: Cannot use a session that has ended" figured out.
+        // addMissingPersonsListFullToDB();
     })
 }
 
+// async function getalldata() {
+//     await storeInitialFBIData();
+//     sortMissingPersonData();
+// }
+
 async function getalldata() {
-    await storeInitialFBIData();
-    sortMissingPersonData();
+    addMissingPersonsListFullToDB();
 }
 
 getalldata();
