@@ -22,15 +22,16 @@ let fbimissingpersondetails = [];
 function addMissingPersonsListFullToDB() {
 
     fs.readFile(fbimissingpersondatafileName, (err, data) => {
-        if(err) return console.log(err);
+        if(err) return catchError(err);
         let details = JSON.parse(data);
             //Clear DB out here
             
             //Add final file to DB
-            client.connect(err => {
-                if(err) return console.log(err);
-                const collection = client.db(databasename).collection(nameofcollection);
-                collection.insertMany(details);
+            client.connect(async(err) => {
+                if(err) return catchError(err);
+
+                const collection = await client.db(databasename).collection(nameofcollection);
+                await collection.insertMany(details);
                 client.close();
               });
     })
@@ -109,7 +110,7 @@ let storeInitialFBIData = async () => {
     fbimissingpersondetails.push(missingpersonobj);
     //this makes sense right?
     fs.writeFile(fbimissingpersondetailsfileName, JSON.stringify(fbimissingpersondetails), err => {
-        if(err) console.log(err);
+        if(err) catchError(err);
         console.log("Saved Person.");
     });
     browser.close();
@@ -133,6 +134,11 @@ function sortMissingPersonData() {
 //     await storeInitialFBIData();
 //     sortMissingPersonData();
 // }
+
+function catchError(err) {
+    console.log(err);
+    process.exit();
+}
 
 async function getalldata() {
     addMissingPersonsListFullToDB();
