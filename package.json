@@ -1,7 +1,7 @@
 {
-  "name": "fbi-missing-person-api",
+  "name": "fbi-missing-person-db",
   "version": "1.0.0",
-  "description": "FBI Missing Persons API",
+  "description": "FBI Missing Persons Info To DB",
   "main": "serve.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
