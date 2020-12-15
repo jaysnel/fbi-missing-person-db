@@ -13,28 +13,27 @@ const client = new mongoclient(uri, { useNewUrlParser: true, useUnifiedTopology:
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const fbiurl = "https://www.fbi.gov/wanted/kidnap";
+//Originally stored all info to files, then realized you might not have the correct privileges to do so.
+//Keeping here for now because I can be a bit of a code hoarder...I'm working on it.
+// const fbimissingpersondatafileName = "fbimissingpersondata.txt";
+// const fbimissingpersondetailsfileName = "fbimissingpersondetailsfile.txt";
 let missingpersons = [];
-const fbimissingpersondatafileName = "fbimissingpersondata.txt";
-const fbimissingpersondetailsfileName = "fbimissingpersondetailsfile.txt"
 let fbimissingpersondetails = [];
 
 
-function addMissingPersonsListFullToDB() {
-
-    fs.readFile(fbimissingpersondatafileName, (err, data) => {
+let addMissingPersonListToDB = async() => {
+    //Add final list to DB
+    client.connect(async(err) => {
         if(err) return catchError(err);
-        let details = JSON.parse(data);
-            //Clear DB out here
-            
-            //Add final file to DB
-            client.connect(async(err) => {
-                if(err) return catchError(err);
 
-                const collection = await client.db(databasename).collection(nameofcollection);
-                await collection.insertMany(details);
-                client.close();
-              });
-    })
+        const collection = await client.db(databasename).collection(nameofcollection);
+        //Clear DB out here before new set
+        await collection.drop();
+        //Insert full list at once
+        await collection.insertMany(fbimissingpersondetails);
+        console.log("DB updated.");
+        client.close();
+      });
 
 }
 
@@ -47,7 +46,7 @@ let storeInitialFBIData = async () => {
   
     await page.goto(fbiurl);
     // https://www.fbi.gov/wanted/kidnap uses lazy loading so
-    // im using window.scrollBy() to force all of the elements to load
+    // im using window.scrollBy() to force all of the elements to load beofre starting process
     await page.evaluate(() => {
         window.scrollBy(0, document.body.scrollHeight);
       });
@@ -59,19 +58,11 @@ let storeInitialFBIData = async () => {
     // creating object to write to a file which contains name of missing person and thier detials link
     persons.forEach((el, idx) =>  {
         missingpersons.push({
-            name: removeNewLineCharactersFromPersonsName(el),
+            name: el,
             link:  personslink[idx]
         })
     });
-    function removeNewLineCharactersFromPersonsName(person) {
-        return person.replace(/\n/g, "");
-    }
 
-    //maybe theres a better way than writing to a file, but for now this works and gets the job done
-    fs.writeFile(fbimissingpersondatafileName, JSON.stringify(missingpersons), err => {
-        if(err) console.log(err);
-    })
-  
     browser.close();
   };
 
@@ -90,7 +81,7 @@ let storeInitialFBIData = async () => {
     let details = await page.evaluate(() => document.querySelector('.wanted-person-details p').textContent);
     let content = await page.evaluate(() => document.querySelector('.wanted-person-description table tbody tr'));
     //fbi data for each person was inside of a table that had no ids or classes,
-    //but were the only time they used a table at all on the page
+    //but were the only time they used a table at all on the page and it was unique.
     let allmissingpersoninfo = await page.evaluate(() => Array.from(content.querySelectorAll('td'), element => element.innerHTML));
     
     //creating object of each persons data and pushing it to a global array
@@ -106,34 +97,18 @@ let storeInitialFBIData = async () => {
     missingpersonobj["Submit a Tip"] = submittip;
     missingpersonobj["Found"] = false;
     missingpersonobj["Headshot"] = image;
-    //pushing to global array
+    //pushing each missing persons info to global array.
+    //Preparing this for DB
     fbimissingpersondetails.push(missingpersonobj);
-    //this makes sense right?
-    fs.writeFile(fbimissingpersondetailsfileName, JSON.stringify(fbimissingpersondetails), err => {
-        if(err) catchError(err);
-        console.log("Saved Person.");
-    });
+
     browser.close();
   };
 
-function sortMissingPersonData() {
-    fs.readFile(fbimissingpersondatafileName, async (err, data) => {
-        if(err) return console.log(err);
-        let details = JSON.parse(data);
-        for(let i = 0; i <= details.length - 1; i++) {
-            await getPersonsDataFromFBI(details[i].link);
-        }
-
-        //Final step
-        //THIS NEEDS TO BE ADDED!!! MAYBE WITH ASYNC/AWAIT? WELL NEED TO FIGURE THIS AFTER I GET THIS "MongoError: Cannot use a session that has ended" figured out.
-        // addMissingPersonsListFullToDB();
-    })
+let sortMissingPersonData = async() => {
+    for(let i = 0; i <= missingpersons.length - 1; i++) {
+        await getPersonsDataFromFBI(missingpersons[i].link);
+    }
 }
-
-// async function getalldata() {
-//     await storeInitialFBIData();
-//     sortMissingPersonData();
-// }
 
 function catchError(err) {
     console.log(err);
@@ -141,7 +116,9 @@ function catchError(err) {
 }
 
 async function getalldata() {
-    addMissingPersonsListFullToDB();
+    await storeInitialFBIData();
+    await sortMissingPersonData();
+    await addMissingPersonListToDB();
 }
 
 getalldata();
