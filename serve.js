@@ -1,5 +1,14 @@
 //DB Info
 require('dotenv').config();
+//General data
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+
+//MongoDB data
 const mongodb = require('mongodb');
 const mongoclient = mongodb.MongoClient;
 const username = process.env.CLUSTER_USERNAME;
@@ -8,15 +17,17 @@ const databasename = process.env.DATABASE_NAME;
 const nameofcollection = process.env.COLLECTION_NAME;
 const uri = `mongodb+srv://${username}:${password}@cluster0.suitu.mongodb.net/${databasename}>?retryWrites=true&w=majority`;
 const client = new mongoclient(uri, { useNewUrlParser: true, useUnifiedTopology: true  });
+//Twilio Info
+const twilioNumber = process.env.TWILIOPHONENUMBER;
+const phoneNumber = process.env.PHONENUMBER;
+const accountSid = process.env.ACCOUNTSID;
+const authToken = process.env.AUTHTOKEN;
+const twilioclient = require('twilio')(accountSid, authToken);
 
 //Web Scraping Info
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const fbiurl = "https://www.fbi.gov/wanted/kidnap";
-//Originally stored all info to files, then realized you might not have the correct privileges to do so.
-//Keeping here for now because I can be a bit of a code hoarder...I'm working on it.
-// const fbimissingpersondatafileName = "fbimissingpersondata.txt";
-// const fbimissingpersondetailsfileName = "fbimissingpersondetailsfile.txt";
 let missingpersons = [];
 let fbimissingpersondetails = [];
 
@@ -111,7 +122,7 @@ let sortMissingPersonData = async() => {
 }
 
 function catchError(err) {
-    console.log(err);
+    sendTextMessage(err);
     process.exit();
 }
 
@@ -121,4 +132,71 @@ async function getalldata() {
     await addMissingPersonListToDB();
 }
 
+
+//////////////////////////////////////
+//      Twilio Send Error Text Message
+//////////////////////////////////////
+function sendTextMessage(err) {
+    twilioclient.messages
+        .create({
+            body: err,
+            from: twilioNumber,
+            to: phoneNumber
+        })
+        .then(message => {return message});
+}
+
+
 getalldata();
+let client;
+
+//Connection data
+let app = express();
+let port = process.env.PORT || 8080;
+
+app.use(helmet());
+app.use(bodyParser.json());
+app.use(cors());
+app.use(morgan('combined'));
+
+//Main Home
+app.get('/', (req, res) => {
+
+     return res.send("Welcome To Missing Person DB.");
+});
+
+
+//Return All Data
+app.get('/v1/all', (req, res) => {
+
+     let getFullList = async() => {
+
+     returnNewClientInstance();
+     client.connect(async(err) => {
+          if(err) return catchError(err);
+
+          const collection = await client.db(databasename).collection(nameofcollection);
+          
+          let data = await collection.find({}, { projection: { _id: 0 } }).toArray();
+          res.send(data);
+          client.close();
+          });
+     
+     }
+
+     getFullList();
+});
+
+//Other Functions
+//Re-initializing client, was not able to make this global as it never get reinitialized
+function returnNewClientInstance() {
+     return client = new mongoclient(uri, { useNewUrlParser: true, useUnifiedTopology: true  });
+}
+
+function catchError(err) {
+     console.log(err);
+ }
+
+app.listen(port, function () {
+     console.log("Running on port " + port);
+});
