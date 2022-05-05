@@ -1,6 +1,6 @@
 # fbi-missing-person-db
 
-```node serve.js```
+Run script with: ```node serve.js```
 
 This is a project to make more aware of missing children. This project uses googles puppeteer to go out and scrape https://www.fbi.gov/wanted/kidnap to gather information on current missing children. This data is scraped and stored in mongoDB, then used to provide a public facing api for other developers to use.
 
